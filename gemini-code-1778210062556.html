@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>스마트 자리배치 프로그램</title>
+    <style>
+        /* 구글 웹 폰트 'Noto Sans KR' 500(Medium), 900(Black) 불러오기 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@500;900&display=swap');
+
+        /* 전체 기본 폰트 Noto Sans KR 500 적용 및 스크롤바 숨김 */
+        body { font-family: 'Noto Sans KR', sans-serif; font-weight: 500; margin: 0; padding: 20px; background-color: #f4f7f6; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; flex-shrink: 0; }
+        .header-title { display: flex; align-items: center; gap: 15px; }
+        .header-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        
+        .header button { padding: 10px 15px; font-size: 14px; font-weight: 500; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px; transition: 0.2s; font-family: inherit; }
+        .header button:hover { background-color: #45a049; }
+        
+        .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; }
+        .file-upload-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
+        
+        .file-upload-btn { background-color: #2196F3 !important; }
+        .file-upload-btn:hover { background-color: #1976D2 !important; }
+        .load-result-btn { background-color: #9c27b0 !important; }
+        .load-result-btn:hover { background-color: #7b1fa2 !important; }
+
+        .bundan-btn { background-color: #009688 !important; }
+        .bundan-btn:hover { background-color: #00796b !important; }
+
+        .print-btn { background-color: #607d8b !important; }
+        .print-btn:hover { background-color: #455a64 !important; }
+
+        .reset-btn { background-color: #f44336 !important; }
+        .reset-btn:hover { background-color: #d32f2f !important; }
+        .save-btn { background-color: #ff9800 !important; }
+        .save-btn:hover { background-color: #e68a00 !important; }
+
+        .container { display: flex; gap: 20px; flex: 1; min-height: 0; }
+        
+        /* 왼쪽: 학생 대기열 사이드바 */
+        .sidebar { width: 250px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+        .sidebar-title { background: #333; color: white; text-align: center; padding: 15px; margin: 0; font-size: 16px; pointer-events: none; display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+        .count-badge { background: #ffeb3b; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 14px; font-weight: 900; }
+        
+        .manual-add-wrapper { display: flex; padding: 10px; border-bottom: 1px solid #eee; background: #fafafa; }
+        .manual-add-wrapper input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px 0 0 4px; outline: none; font-family: inherit; font-size: 13px; font-weight: 500; }
+        .manual-add-wrapper button { padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 0 4px 4px 0; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; transition: 0.2s; }
+        .manual-add-wrapper button:hover { background: #1976D2; }
+
+        .student-list { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+        .student { background: #e3f2fd; border: 1px solid #90caf9; padding: 6px 15px 6px 6px; border-radius: 4px; cursor: grab; font-size: 14px; text-align: center; width: calc(50% - 15px); box-sizing: border-box; user-select: none; word-break: keep-all; z-index: 10; font-family: inherit; font-weight: 500; position: relative; }
+        .student:active { cursor: grabbing; }
+
+        .delete-btn { position: absolute; top: 3px; right: 5px; color: #f44336; cursor: pointer; display: none; font-family: sans-serif; font-size: 14px; font-weight: bold; line-height: 1; }
+        .delete-btn:hover { color: #d32f2f; }
+        .sidebar .student:hover .delete-btn { display: block; }
+        
+        /* 오른쪽: 교실 */
+        .classroom-wrapper { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; align-items: center; user-select: none; overflow: hidden; box-sizing: border-box; }
+        .teacher-desk { width: 30%; height: 40px; background: #cfd8dc; text-align: center; line-height: 40px; border-radius: 5px; margin-bottom: 20px; pointer-events: none; flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 18px; font-weight: 900; letter-spacing: 2px; }
+        
+        /* 가변 그리드 설정 */
+        .grid-container { flex: 1; width: 100%; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0; overflow: hidden; }
+        
+        /* 기본 상태: 전체 붙임 (8칸 동일 비율) */
+        .grid { 
+            display: grid; 
+            width: 100%; height: 100%; gap: 8px; 
+            grid-template-columns: repeat(8, minmax(0, 1fr)); 
+            grid-template-rows: repeat(7, minmax(0, 1fr)); 
+        }
+        
+        /* 4분단(2-2-2-2) */
+        .grid.bundan-4 { grid-template-columns: minmax(0,10fr) minmax(0,10fr) minmax(0,3fr) minmax(0,10fr) minmax(0,10fr) minmax(0,3fr) minmax(0,10fr) minmax(0,10fr) minmax(0,3fr) minmax(0,10fr) minmax(0,10fr); }
+        .grid.bundan-4 > div:nth-child(8n+1) { grid-column: 1; }
+        .grid.bundan-4 > div:nth-child(8n+2) { grid-column: 2; }
+        .grid.bundan-4 > div:nth-child(8n+3) { grid-column: 4; } 
+        .grid.bundan-4 > div:nth-child(8n+4) { grid-column: 5; }
+        .grid.bundan-4 > div:nth-child(8n+5) { grid-column: 7; } 
+        .grid.bundan-4 > div:nth-child(8n+6) { grid-column: 8; }
+        .grid.bundan-4 > div:nth-child(8n+7) { grid-column: 10; } 
+        .grid.bundan-4 > div:nth-child(8n+8) { grid-column: 11; }
+
+        /* 8분단(시험대형) */
+        .grid.bundan-8 { grid-template-columns: minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr) minmax(0,1.5fr) minmax(0,10fr); }
+        .grid.bundan-8 > div:nth-child(8n+1) { grid-column: 1; }
+        .grid.bundan-8 > div:nth-child(8n+2) { grid-column: 3; }
+        .grid.bundan-8 > div:nth-child(8n+3) { grid-column: 5; }
+        .grid.bundan-8 > div:nth-child(8n+4) { grid-column: 7; }
+        .grid.bundan-8 > div:nth-child(8n+5) { grid-column: 9; }
+        .grid.bundan-8 > div:nth-child(8n+6) { grid-column: 11; }
+        .grid.bundan-8 > div:nth-child(8n+7) { grid-column: 13; }
+        .grid.bundan-8 > div:nth-child(8n+8) { grid-column: 15; }
+
+        /* 책상 공통 설정 */
+        .grid > div { 
+            width: 100%; height: 100%; border-radius: 5px; box-sizing: border-box; 
+            display: flex; align-items: center; justify-content: center; 
+            transition: background-color 0.2s, border-color 0.2s; 
+            min-width: 0; min-height: 0; overflow: hidden; 
+            grid-column: auto; 
+            /* 💡 글씨 크기 반응형을 위한 Container 지정 */
+            container-type: inline-size;
+        }
+
+        /* 통로(빈칸) */
+        .cell { border: 2px dashed #ddd; cursor: pointer; }
+        
+        /* 책상 기본 색상 (4~7행) */
+        .desk { border: 2px solid #8d6e63; background-color: #d7ccc8; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
+        /* 책상 앞 3행 (1~24번째 칸) 보라색 계열 적용 */
+        .grid > div:nth-child(-n+24).desk { border-color: #ab47bc; background-color: #e1bee7; }
+
+        /* 💡 책상 안 학생 이름 폰트 (Container Unit 적용으로 꽉 차게 조절) */
+        .desk .student { 
+            width: 95%; height: 85%; margin: 0; padding: 0; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: clamp(12px, 16cqw, 22px); 
+            font-family: inherit; font-weight: 900; letter-spacing: 0.5px; 
+            white-space: nowrap; overflow: hidden; text-overflow: clip; 
+        }
+
+        #countdown-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); color: white; display: none; align-items: center; justify-content: center; font-size: 150px; z-index: 1000; flex-direction: column; font-family: inherit; font-weight: 900; }
+        #countdown-text { animation: pop 1s infinite; }
+        @keyframes pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+
+        /* 인쇄 전용 스타일 */
+        @media print {
+            @page { size: A4 landscape; margin: 8mm; } 
+            
+            html, body { background-color: white !important; padding: 0 !important; margin: 0 !important; height: 100% !important; overflow: hidden !important; }
+            
+            .header, .sidebar, #countdown-overlay { display: none !important; }
+            .container { display: flex; width: 100%; height: 100%; margin: 0; padding: 0; }
+            
+            .classroom-wrapper { box-shadow: none !important; border: none !important; padding: 5px !important; margin: 0 !important; width: 100% !important; height: 100% !important; display: flex; flex-direction: column; box-sizing: border-box; }
+            
+            .teacher-desk { font-size: 18pt; height: 40px; margin-bottom: 10px; margin-top: 0; }
+            
+            .grid-container { flex: 1; width: 100%; min-height: 0; padding-bottom: 5px; }
+            .grid { gap: 6px !important; }
+
+            .grid.bundan-4 { grid-template-columns: 1fr 1fr 15px 1fr 1fr 15px 1fr 1fr 15px 1fr 1fr !important; }
+            .grid.bundan-8 { grid-template-columns: 1fr 10px 1fr 10px 1fr 10px 1fr 10px 1fr 10px 1fr 10px 1fr 10px 1fr !important; }
+            
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .desk { box-shadow: none !important; border: 2px solid #8d6e63 !important; }
+            .desk .student { font-size: 14pt !important; letter-spacing: -0.5px !important; } 
+
+            /* 교사용 인쇄 모드 (상하 반전) */
+            body.print-teacher .classroom-wrapper { flex-direction: column-reverse; }
+            body.print-teacher .teacher-desk { margin-bottom: 0; margin-top: 10px; }
+            body.print-teacher .grid { transform: rotate(180deg); }
+            body.print-teacher .desk .student { transform: rotate(180deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="countdown-overlay">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <div class="header">
+        <div class="header-title">
+            <h2 style="margin: 0; font-weight: 900; letter-spacing: 1px;">스마트 자리배치 프로그램</h2>
+        </div>
+        <div class="header-controls">
+            <div class="file-upload-wrapper">
+                <button class="file-upload-btn">📝 명단 불러오기</button>
+                <input type="file" id="file-input" accept=".txt">
+            </div>
+            <div class="file-upload-wrapper">
+                <button class="load-result-btn">📂 결과 불러오기</button>
+                <input type="file" id="load-result-input" accept=".txt">
+            </div>
+            
+            <button id="bundan-btn" class="bundan-btn" onclick="toggleBundan()">◫ 분단: 전체 붙임</button>
+            <button class="print-btn" onclick="executePrint('student')">🖨️ 학생용 인쇄</button>
+            <button class="print-btn" onclick="executePrint('teacher')">🖨️ 교사용 인쇄</button>
+
+            <button class="reset-btn" onclick="resetSeats()">🔄 전체 초기화</button>
+            <button onclick="startCountdown()">🎲 남은 좌석 랜덤</button>
+            <button class="save-btn" onclick="saveResult()">💾 결과 저장</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <h3 class="sidebar-title">
+                <span>대기열</span>
+                <span class="count-badge"><span id="wait-count">0</span>명</span>
+            </h3>
+            
+            <div class="manual-add-wrapper">
+                <input type="text" id="manual-input" placeholder="이름 입력 후 엔터" onkeypress="handleManualAddEnter(event)">
+                <button onclick="addManualStudent()">추가</button>
+            </div>
+
+            <div class="student-list" id="student-list">
+                <p id="empty-msg" style="color: #666; font-size: 13px; text-align: center; width: 100%; margin-top: 20px;">
+                    명단을 불러오거나<br>직접 입력하여 추가해주세요.
+                </p>
+            </div>
+        </div>
+
+        <div class="classroom-wrapper">
+            <div class="teacher-desk">
+                <span>교 탁</span>
+                <span style="font-size: 14px; color: #444; font-weight: 500;">
+                    (전체: <b id="desk-count" style="font-weight: 900;">0</b> / 빈자리: <b id="empty-count" style="font-weight: 900; color: #e91e63;">0</b>)
+                </span>
+            </div>
+            <div class="grid-container">
+                <div class="grid" id="classroom">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const studentListEl = document.getElementById('student-list');
+        const sidebarEl = document.getElementById('sidebar');
+        const classroomEl = document.getElementById('classroom');
+        const MAX_STUDENTS = 56; 
+
+        // --- 인쇄 로직 ---
+        function executePrint(mode) {
+            if (mode === 'teacher') {
+                document.body.classList.add('print-teacher');
+            } else {
+                document.body.classList.add('print-student');
+            }
+            
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('print-teacher', 'print-student');
+            }, 100);
+        }
+
+        // --- 분단 띄우기 로직 ---
+        let bundanState = 0; 
+        function toggleBundan() {
+            bundanState = (bundanState + 1) % 3;
+            const grid = document.getElementById('classroom');
+            const btn = document.getElementById('bundan-btn');
+            
+            grid.classList.remove('bundan-4', 'bundan-8');
+            
+            if (bundanState === 0) {
+                btn.innerText = "◫ 분단: 전체 붙임";
+            } else if (bundanState === 1) {
+                grid.classList.add('bundan-4');
+                btn.innerText = "◫ 분단: 4분단(2명씩)";
+            } else if (bundanState === 2) {
+                grid.classList.add('bundan-8');
+                btn.innerText = "◫ 분단: 8분단(시험)";
+            }
+        }
+
+        // --- 실시간 카운트 업데이트 ---
+        function updateCounters() {
+            const waitCount = studentListEl.querySelectorAll('.student').length;
+            document.getElementById('wait-count').innerText = waitCount;
+
+            const allDesks = classroomEl.querySelectorAll('.desk');
+            const deskCount = allDesks.length;
+            document.getElementById('desk-count').innerText = deskCount;
+
+            const emptyCount = Array.from(allDesks).filter(desk => desk.children.length === 0).length;
+            document.getElementById('empty-count').innerText = emptyCount;
+        }
+
+        // --- 수동 추가 로직 ---
+        function addManualStudent() {
+            const inputEl = document.getElementById('manual-input');
+            const name = inputEl.value.trim();
+
+            if (!name) return;
+
+            if (name.includes(',')) {
+                alert("이름에는 쉼표(,)를 사용할 수 없습니다.");
+                return;
+            }
+
+            const totalStudents = document.querySelectorAll('.student').length;
+            if (totalStudents >= MAX_STUDENTS) {
+                alert(`최대 인원(${MAX_STUDENTS}명)을 초과할 수 없습니다.`);
+                return;
+            }
+
+            const emptyMsg = document.getElementById('empty-msg');
+            if (emptyMsg) emptyMsg.remove();
+
+            const id = `std-manual-${Date.now()}`;
+            createStudentElement(name, id, studentListEl);
+            
+            inputEl.value = '';
+            updateCounters();
+        }
+
+        function handleManualAddEnter(e) {
+            if (e.key === 'Enter') {
+                addManualStudent();
+            }
+        }
+
+        // 1-1. 새 명단 파일 불러오기
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parseStudentData(text);
+            };
+            reader.readAsText(file, "UTF-8");
+            this.value = ''; 
+        });
+
+        function parseStudentData(text) {
+            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+            
+            if (lines.length > MAX_STUDENTS) {
+                alert(`학생 수는 최대 ${MAX_STUDENTS}명까지만 지원합니다.`);
+                lines.length = MAX_STUDENTS;
+            }
+
+            studentListEl.innerHTML = ''; 
+
+            lines.forEach((line, index) => {
+                const safeName = line.replace(/,/g, ' '); 
+                createStudentElement(safeName, `std-${index}`, studentListEl);
+            });
+            updateCounters();
+        }
+
+        // 1-2. 저장된 결과 파일 불러오기
+        document.getElementById('load-result-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                loadSeatingArrangement(text);
+            };
+            reader.readAsText(file, "UTF-8");
+            this.value = ''; 
+        });
+
+        function loadSeatingArrangement(text) {
+            const data = text.replace(/\r?\n/g, '').split(',').map(item => item.trim());
+            
+            if (data.length !== 56) {
+                alert(`올바른 자리배치 결과 파일이 아닙니다.\n(총 56칸의 데이터가 있어야 하는데, 현재 ${data.length}칸입니다.)`);
+                return;
+            }
+
+            studentListEl.innerHTML = '';
+            let studentIndex = 0;
+            const cells = classroomEl.children;
+
+            for (let i = 0; i < 56; i++) {
+                const cell = cells[i];
+                const val = data[i];
+
+                cell.innerHTML = ''; 
+
+                if (val === '통로') {
+                    cell.className = 'cell';
+                } else if (val === '빈자리') {
+                    cell.className = 'desk';
+                } else {
+                    cell.className = 'desk';
+                    createStudentElement(val, `std-loaded-${studentIndex++}`, cell);
+                }
+            }
+            updateCounters();
+        }
+
+        function createStudentElement(dataRaw, id, parentElement) {
+            const div = document.createElement('div');
+            div.className = 'student';
+            div.draggable = true;
+            div.id = id;
+            div.dataset.raw = dataRaw; 
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.innerText = dataRaw;
+            div.appendChild(nameSpan);
+
+            const delBtn = document.createElement('span');
+            delBtn.className = 'delete-btn';
+            delBtn.innerHTML = '&times;';
+            delBtn.title = '명단에서 삭제';
+            
+            delBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); 
+                if (confirm(`[${dataRaw}] 학생을 명단에서 완전히 삭제하시겠습니까?`)) {
+                    div.remove();
+                    updateCounters();
+                }
+            });
+            div.appendChild(delBtn);
+            
+            div.addEventListener('dragstart', dragStart);
+            div.addEventListener('dblclick', handleDoubleClick);
+            
+            parentElement.appendChild(div);
+        }
+
+        function handleDoubleClick(e) {
+            const student = e.currentTarget;
+            if (student.parentElement.classList.contains('desk')) {
+                if (confirm(`[${student.dataset.raw}] 학생을 대기열로 되돌리시겠습니까?`)) {
+                    studentListEl.appendChild(student);
+                    updateCounters(); 
+                }
+            }
+        }
+
+        // 2. 교실 그리드 생성 (8칸 x 7줄 = 56칸)
+        for (let i = 0; i < 56; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'desk';
+            
+            cell.addEventListener('dragover', dragOver);
+            cell.addEventListener('drop', drop);
+            classroomEl.appendChild(cell);
+        }
+        updateCounters(); 
+
+        // 3. 드래그로 책상 그리기/지우기 기능
+        let isDrawing = false;
+        let drawMode = 'desk';
+
+        classroomEl.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('desk') || e.target.classList.contains('cell')) {
+                isDrawing = true;
+                drawMode = e.target.classList.contains('desk') ? 'cell' : 'desk';
+                toggleDeskState(e.target, drawMode);
+            }
+        });
+
+        classroomEl.addEventListener('mouseover', (e) => {
+            if (isDrawing && (e.target.classList.contains('desk') || e.target.classList.contains('cell'))) {
+                toggleDeskState(e.target, drawMode);
+            }
+        });
+
+        document.addEventListener('mouseup', () => { 
+            if(isDrawing) {
+                isDrawing = false;
+                updateCounters(); 
+            }
+        });
+
+        function toggleDeskState(element, mode) {
+            if (element.children.length > 0) return; 
+
+            if (mode === 'desk') {
+                element.className = 'desk';
+            } else {
+                element.className = 'cell';
+            }
+            if(!isDrawing) updateCounters();
+        }
+
+        sidebarEl.addEventListener('dragover', dragOver);
+        sidebarEl.addEventListener('drop', drop);
+
+        let draggedItem = null;
+
+        function dragStart(e) { draggedItem = e.target; }
+        function dragOver(e) { e.preventDefault(); }
+        
+        function drop(e) {
+            e.preventDefault();
+            const target = e.currentTarget;
+
+            if (target.classList.contains('desk') && target.children.length === 0) {
+                target.appendChild(draggedItem);
+                updateCounters(); 
+            } 
+            else if (target.id === 'sidebar' || target.closest('.sidebar')) {
+                studentListEl.appendChild(draggedItem);
+                updateCounters(); 
+            }
+        }
+
+        function resetSeats() {
+            const seatedStudents = classroomEl.querySelectorAll('.student');
+            if (seatedStudents.length === 0) return;
+
+            if (confirm("배치된 학생들을 모두 대기열로 되돌리시겠습니까?")) {
+                seatedStudents.forEach(student => {
+                    studentListEl.appendChild(student);
+                });
+                updateCounters(); 
+            }
+        }
+
+        function startCountdown() {
+            const allDesks = Array.from(document.querySelectorAll('.desk'));
+            const emptyDesks = allDesks.filter(desk => desk.children.length === 0);
+            const remainingStudents = Array.from(studentListEl.querySelectorAll('.student'));
+
+            if (remainingStudents.length === 0) {
+                alert("배치할 학생이 대기열에 없습니다.");
+                return;
+            }
+            if (remainingStudents.length > emptyDesks.length) {
+                alert(`빈 책상이 부족합니다!\n학생: ${remainingStudents.length}명 / 남은 책상: ${emptyDesks.length}개`);
+                return;
+            }
+
+            const overlay = document.getElementById('countdown-overlay');
+            const textEl = document.getElementById('countdown-text');
+            overlay.style.display = 'flex';
+            
+            let count = 3;
+            textEl.innerText = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    textEl.innerText = count;
+                    textEl.style.animation = 'none';
+                    void textEl.offsetWidth; 
+                    textEl.style.animation = 'pop 1s infinite';
+                } else if (count === 0) {
+                    textEl.innerText = "배치 완료!";
+                    textEl.style.animation = 'none';
+                    executeRandomize(remainingStudents, emptyDesks); 
+                } else {
+                    clearInterval(timer);
+                    overlay.style.display = 'none';
+                }
+            }, 1000);
+        }
+
+        function executeRandomize(students, desks) {
+            for (let i = students.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [students[i], students[j]] = [students[j], students[i]];
+            }
+
+            students.forEach((student, index) => {
+                desks[index].appendChild(student);
+            });
+            updateCounters(); 
+        }
+
+        function saveResult() {
+            const suffix = prompt("파일 이름 끝에 붙일 꼬릿말을 입력하세요.\n(예: 1반, 진로탐색반 등)\n\n입력하지 않으려면 그냥 확인을 누르세요.", "");
+            
+            if (suffix === null) return;
+
+            const cells = document.querySelectorAll('#classroom > div');
+            let allData = [];
+
+            for (let i = 0; i < 56; i++) {
+                const cell = cells[i];
+                if (cell.classList.contains('desk') && cell.children.length > 0) {
+                    const student = cell.children[0];
+                    allData.push(student.dataset.raw);
+                } else if (cell.classList.contains('desk')) {
+                    allData.push("빈자리");
+                } else {
+                    allData.push("통로");
+                }
+            }
+            
+            const resultText = allData.join(",");
+
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            
+            let fileName = `[자리배치]${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+            if (suffix.trim() !== "") {
+                fileName += `_${suffix.trim()}`;
+            }
+            fileName += `.txt`;
+
+            const blob = new Blob([resultText], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+        }
+    </script>
+</body>
+</html>
